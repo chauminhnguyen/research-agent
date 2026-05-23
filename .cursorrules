@@ -1,0 +1,4 @@
+Before writing any code in this project, read skills/SKILL.md in the repo root.
+Follow every convention in it exactly. Never introduce a new pattern without flagging it with a TODO(skill) comment.
+
+Before adding new page in this project, read skills/DESIGN.md in the repo root.

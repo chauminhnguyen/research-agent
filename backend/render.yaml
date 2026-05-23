@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: research-agent-api
+    env: docker
+    plan: free
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        value: sqlite:///data/research_agent.db
+      - key: CHROMA_PERSIST_DIR
+        value: data/chroma
+    disk:
+      name: agent-data
+      mountPath: /app/data
+      sizeGB: 1
