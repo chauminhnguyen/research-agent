@@ -8,6 +8,11 @@ class SessionCreate(BaseModel):
     module: str = Field(default="ideas", pattern="^(ideas|coding|paper)$")
 
 
+class SessionUpdate(BaseModel):
+    topic: Optional[str] = Field(None, min_length=1, max_length=500)
+    module: Optional[str] = Field(None, pattern="^(ideas|coding|paper)$")
+
+
 class SessionResponse(BaseModel):
     id: str
     user_id: str
@@ -19,3 +24,6 @@ class SessionResponse(BaseModel):
 
 class SessionListResponse(BaseModel):
     sessions: list[SessionResponse]
+    total: int
+    limit: int
+    offset: int

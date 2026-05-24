@@ -10,13 +10,14 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
-from app.middleware.rate_limit import limiter
+from app.middleware.rate_limit import limiter, auth_limiter
 from app.middleware.logging import LoggingMiddleware
 from app.auth.router import router as auth_router
 from app.routers.chat import router as chat_router
 from app.routers.sessions import router as sessions_router
 from app.routers.memory import router as memory_router
 from app.memory.session_store import init_memory_tables
+from app.experiments.router import router as experiments_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
+app.state.auth_limiter = auth_limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(LoggingMiddleware)
@@ -71,6 +73,7 @@ app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(sessions_router)
 app.include_router(memory_router)
+app.include_router(experiments_router)
 
 
 @app.exception_handler(Exception)

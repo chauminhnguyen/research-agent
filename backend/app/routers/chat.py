@@ -10,7 +10,7 @@ from app.agent.graph import graph
 from app.agent.state import AgentState
 from app.memory.agent_memory import AgentMemory
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/v1/chat", tags=["chat"])
 memory = AgentMemory()
 
 
@@ -26,12 +26,13 @@ def build_state(request: ChatRequest, user: dict) -> AgentState:
     )
 
 
-async def event_generator(state: AgentState, request: ChatRequest) -> AsyncGenerator[str, None]:
+async def event_generator(state: AgentState, request: ChatRequest, user_id: str) -> AsyncGenerator[str, None]:
     try:
         memory.save_chat_turn(
             session_id=request.session_id,
             role="user",
-            message=request.message
+            message=request.message,
+            user_id=user_id
         )
         
         async for event in graph.astream_events(state, version="v1"):
@@ -48,7 +49,8 @@ async def event_generator(state: AgentState, request: ChatRequest) -> AsyncGener
                     memory.save_chat_turn(
                         session_id=request.session_id,
                         role="assistant",
-                        message=response.content
+                        message=response.content,
+                        user_id=user_id
                     )
         
         yield f"data: {json.dumps({'type': 'done', 'content': ''})}\n\n"
@@ -97,7 +99,7 @@ async def stream(request: ChatRequest, user: dict = Depends(get_current_user)):
         )
     
     return StreamingResponse(
-        event_generator(state, request),
+        event_generator(state, request, user["id"]),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

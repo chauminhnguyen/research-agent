@@ -43,10 +43,11 @@ class VectorMemory:
     def _generate_id(self, prefix: str, item_id: str) -> str:
         return f"{prefix}_{item_id}"
 
-    def save(self, session_id: str, item_id: str, text: str, metadata: dict) -> None:
+    def save(self, session_id: str, item_id: str, text: str, metadata: dict, user_id: Optional[str] = None) -> None:
         collection = self.get_collection()
         doc_id = self._generate_id("doc", item_id)
         metadata["session_id"] = session_id
+        metadata["user_id"] = user_id
         metadata["created_at"] = datetime.utcnow().isoformat()
         
         existing = collection.get(ids=[doc_id])
@@ -58,16 +59,21 @@ class VectorMemory:
     async def save_async(self, session_id: str, item_id: str, text: str, metadata: dict) -> None:
         await asyncio.to_thread(self.save, session_id, item_id, text, metadata)
 
-    def recall(self, query: str, session_id: Optional[str] = None, limit: int = 5) -> list[dict]:
+    def recall(self, query: str, session_id: Optional[str] = None, limit: int = 5, user_id: Optional[str] = None) -> list[dict]:
         collection = self.get_collection()
         query_embedding = self.embeddings.embed_query(query)
         
-        where_filter = {"session_id": session_id} if session_id else None
+        # Build filter: must include user_id for security
+        where_filter = {}
+        if session_id:
+            where_filter["session_id"] = session_id
+        if user_id:
+            where_filter["user_id"] = user_id
         
         results = collection.query(
             query_embeddings=[query_embedding],
             n_results=limit,
-            where=where_filter
+            where=where_filter if where_filter else None
         )
         
         hits = []
@@ -81,8 +87,8 @@ class VectorMemory:
                 })
         return hits
 
-    async def recall_async(self, query: str, session_id: Optional[str] = None, limit: int = 5) -> list[dict]:
-        return await asyncio.to_thread(self.recall, query, session_id, limit)
+    async def recall_async(self, query: str, session_id: Optional[str] = None, limit: int = 5, user_id: Optional[str] = None) -> list[dict]:
+        return await asyncio.to_thread(self.recall, query, session_id, limit, user_id)
 
     def get_by_session(self, session_id: str, limit: int = 50) -> list[dict]:
         collection = self.get_collection()

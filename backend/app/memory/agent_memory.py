@@ -34,7 +34,10 @@ class AgentMemory:
     def list_sessions(self, user_id: str) -> list[dict]:
         return self.store.list_sessions(user_id)
 
-    def save_paper(self, session_id: str, title: str, summary: str, url: Optional[str] = None, citations: Optional[list] = None) -> MemoryEvent:
+    def list_sessions_paginated(self, user_id: str, limit: int = 20, offset: int = 0) -> tuple[list[dict], int]:
+        return self.store.list_sessions_paginated(user_id, limit, offset)
+
+    def save_paper(self, session_id: str, title: str, summary: str, url: Optional[str] = None, citations: Optional[list] = None, user_id: Optional[str] = None) -> MemoryEvent:
         content = {
             "title": title,
             "summary": summary,
@@ -43,20 +46,20 @@ class AgentMemory:
         }
         event = self.store.log_event(session_id, "paper_read", content)
         text = self._content_to_text(content, "paper_read")
-        self.vectors.save(session_id, event.event_id, text, {"event_type": "paper_read", "title": title})
+        self.vectors.save(session_id, event.event_id, text, {"event_type": "paper_read", "title": title}, user_id)
         return event
 
-    def save_hypothesis(self, session_id: str, hypothesis: str, supporting_evidence: Optional[list] = None) -> MemoryEvent:
+    def save_hypothesis(self, session_id: str, hypothesis: str, supporting_evidence: Optional[list] = None, user_id: Optional[str] = None) -> MemoryEvent:
         content = {
             "hypothesis": hypothesis,
             "supporting_evidence": supporting_evidence or []
         }
         event = self.store.log_event(session_id, "hypothesis", content)
         text = self._content_to_text(content, "hypothesis")
-        self.vectors.save(session_id, event.event_id, text, {"event_type": "hypothesis"})
+        self.vectors.save(session_id, event.event_id, text, {"event_type": "hypothesis"}, user_id)
         return event
 
-    def save_code(self, session_id: str, description: str, code: str, language: str = "python") -> MemoryEvent:
+    def save_code(self, session_id: str, description: str, code: str, language: str = "python", user_id: Optional[str] = None) -> MemoryEvent:
         content = {
             "description": description,
             "code": code,
@@ -64,10 +67,10 @@ class AgentMemory:
         }
         event = self.store.log_event(session_id, "code_saved", content)
         text = self._content_to_text(content, "code_saved")
-        self.vectors.save(session_id, event.event_id, text, {"event_type": "code_saved", "language": language})
+        self.vectors.save(session_id, event.event_id, text, {"event_type": "code_saved", "language": language}, user_id)
         return event
 
-    def save_decision(self, session_id: str, decision: str, reason: str, alternatives: Optional[list] = None) -> MemoryEvent:
+    def save_decision(self, session_id: str, decision: str, reason: str, alternatives: Optional[list] = None, user_id: Optional[str] = None) -> MemoryEvent:
         content = {
             "decision": decision,
             "reason": reason,
@@ -75,24 +78,24 @@ class AgentMemory:
         }
         event = self.store.log_event(session_id, "decision", content)
         text = self._content_to_text(content, "decision")
-        self.vectors.save(session_id, event.event_id, text, {"event_type": "decision"})
+        self.vectors.save(session_id, event.event_id, text, {"event_type": "decision"}, user_id)
         return event
 
-    def save_chat_turn(self, session_id: str, role: str, message: str) -> MemoryEvent:
+    def save_chat_turn(self, session_id: str, role: str, message: str, user_id: Optional[str] = None) -> MemoryEvent:
         content = {
             "role": role,
             "message": message
         }
         event = self.store.log_event(session_id, "chat_turn", content)
         text = self._content_to_text(content, "chat_turn")
-        self.vectors.save(session_id, event.event_id, text, {"event_type": "chat_turn", "role": role})
+        self.vectors.save(session_id, event.event_id, text, {"event_type": "chat_turn", "role": role}, user_id)
         return event
 
-    def recall(self, query: str, session_id: Optional[str] = None, limit: int = 5) -> list[dict]:
-        return self.vectors.recall(query, session_id, limit)
+    def recall(self, query: str, session_id: Optional[str] = None, limit: int = 5, user_id: Optional[str] = None) -> list[dict]:
+        return self.vectors.recall(query, session_id, limit, user_id)
 
-    def get_session_history(self, session_id: str) -> list[MemoryEvent]:
-        return self.store.get_events(session_id)
+    def get_session_history(self, session_id: str, limit: Optional[int] = None, offset: int = 0) -> tuple[list[MemoryEvent], int]:
+        return self.store.get_events(session_id, limit, offset)
 
     def delete_session(self, session_id: str) -> bool:
         self.vectors.delete_by_session(session_id)

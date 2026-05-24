@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     environment: str = "development"
     allowed_origins: list[str] = ["http://localhost:3000"]
     rate_limit_per_minute: int = 60
+    auth_rate_limit_per_minute: int = 10  # Stricter limit for auth endpoints
+    token_blacklist_ttl_minutes: int = 1440  # 24 hours for token blacklist retention
 
     model_config = SettingsConfigDict(env_file=".env")
 

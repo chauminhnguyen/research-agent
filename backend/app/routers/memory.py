@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth.router import get_current_user
 from app.routers.memory_schemas import RecallResponse
 from app.memory.agent_memory import AgentMemory
 
-router = APIRouter(prefix="/memory", tags=["memory"])
+router = APIRouter(prefix="/v1/memory", tags=["memory"])
 memory = AgentMemory()
 
 
@@ -15,7 +15,21 @@ async def recall(
     limit: int = Query(5, ge=1, le=20, description="Maximum number of results"),
     user: dict = Depends(get_current_user)
 ) -> RecallResponse:
-    hits = memory.recall(q, session_id, limit)
+    # Validate session ownership if session_id is provided
+    if session_id:
+        session = memory.get_session(session_id)
+        if session is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session not found"
+            )
+        if session["user_id"] != user["id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this session's memory"
+            )
+    
+    hits = memory.recall(q, session_id, limit, user["id"])
     return RecallResponse(hits=hits, query=q)
 
 

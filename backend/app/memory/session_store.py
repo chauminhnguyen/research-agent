@@ -96,6 +96,27 @@ class SessionStore:
         conn.close()
         return [dict(row) for row in rows]
 
+    def list_sessions_paginated(self, user_id: str, limit: int = 20, offset: int = 0) -> tuple[list[dict], int]:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get total count
+        cursor.execute("SELECT COUNT(*) FROM sessions WHERE user_id = ?", (user_id,))
+        total = cursor.fetchone()[0]
+        
+        # Get paginated results
+        cursor.execute(
+            """SELECT id, user_id, topic, module, created_at, updated_at 
+               FROM sessions 
+               WHERE user_id = ? 
+               ORDER BY updated_at DESC 
+               LIMIT ? OFFSET ?""",
+            (user_id, limit, offset)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows], total
+
     def update_session(self, session_id: str, **kwargs) -> None:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -121,19 +142,35 @@ class SessionStore:
         now = datetime.utcnow().isoformat()
         cursor.execute(
             "INSERT INTO events (id, session_id, event_type, content, created_at) VALUES (?, ?, ?, ?, ?)",
-            (event_id, session_id, event_type, now, str(content))
+            (event_id, session_id, event_type, str(content), now)
         )
         conn.commit()
         conn.close()
         return MemoryEvent(event_id=event_id, session_id=session_id, event_type=event_type, content=content, created_at=now)
 
-    def get_events(self, session_id: str) -> list[MemoryEvent]:
+    def get_events(self, session_id: str, limit: Optional[int] = None, offset: int = 0) -> tuple[list[MemoryEvent], int]:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, session_id, event_type, content, created_at FROM events WHERE session_id = ? ORDER BY created_at ASC",
-            (session_id,)
-        )
+        
+        # Get total count
+        cursor.execute("SELECT COUNT(*) FROM events WHERE session_id = ?", (session_id,))
+        total = cursor.fetchone()[0]
+        
+        # Get paginated results
+        if limit:
+            cursor.execute(
+                """SELECT id, session_id, event_type, content, created_at 
+                   FROM events 
+                   WHERE session_id = ? 
+                   ORDER BY created_at ASC 
+                   LIMIT ? OFFSET ?""",
+                (session_id, limit, offset)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, session_id, event_type, content, created_at FROM events WHERE session_id = ? ORDER BY created_at ASC",
+                (session_id,)
+            )
         rows = cursor.fetchall()
         conn.close()
         events = []
@@ -151,7 +188,7 @@ class SessionStore:
                 content=content,
                 created_at=row_dict["created_at"]
             ))
-        return events
+        return events, total
 
     def delete_session(self, session_id: str) -> bool:
         conn = get_db_connection()
