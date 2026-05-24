@@ -1,6 +1,6 @@
 import uuid
 import bcrypt
-import jwt
+from jose import jwt
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 

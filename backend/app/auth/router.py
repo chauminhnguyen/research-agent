@@ -1,4 +1,4 @@
-import jwt
+from jose import jwt
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials
