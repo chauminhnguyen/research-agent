@@ -13,3 +13,4 @@ langchain
 langchain-openai
 langgraph
 chromadb
+jwt
