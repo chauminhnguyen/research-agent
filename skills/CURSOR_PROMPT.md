@@ -222,7 +222,7 @@ Typed wrappers for every backend route. All calls attach the JWT from the cookie
 ```json
 {
   "env": {
-    "NEXT_PUBLIC_API_URL": "@api_url"
+    "NEXT_PUBLIC_API_URL": "https://research-agent-rs4f.onrender.com"
   }
 }
 ```
