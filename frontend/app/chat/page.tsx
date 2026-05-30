@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { InputBar } from "@/components/chat/InputBar";
 import { MemoryPanel } from "@/components/memory/MemoryPanel";
+import { UserButton } from "@/components/auth/UserButton";
 import { api, type Session, type ChatRequest } from "@/lib/api";
-import { Plus, MessageSquare, Settings, LogOut, Menu } from "lucide-react";
+import { useUser } from "@clerk/clerk-react";
+import { Plus, MessageSquare, Settings, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -24,7 +25,7 @@ interface Message {
 }
 
 export default function ChatPage() {
-  const router = useRouter();
+  useUser(); // Ensure auth state is loaded
   const [sessions, setSessions] = React.useState<Session[]>([]);
   const [currentSession, setCurrentSession] = React.useState<Session | null>(null);
   const [messages, setMessages] = React.useState<Message[]>([]);
@@ -160,11 +161,6 @@ export default function ChatPage() {
     }
   };
 
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    router.push("/login");
-  };
-
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString(undefined, {
@@ -229,7 +225,7 @@ export default function ChatPage() {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-hairline space-y-2">
+        <div className="p-4 border-t border-hairline">
           <Link
             href="/settings"
             className="flex items-center gap-2 text-body hover:text-ink px-3 py-2 rounded-sm hover:bg-canvas-soft transition-colors"
@@ -237,13 +233,6 @@ export default function ChatPage() {
             <Settings className="w-4 h-4" />
             <span className="text-sm">Settings</span>
           </Link>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 text-body hover:text-ink px-3 py-2 rounded-sm hover:bg-canvas-soft transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="text-sm">Logout</span>
-          </button>
         </div>
       </aside>
 
@@ -264,6 +253,9 @@ export default function ChatPage() {
                 <p className="text-xs text-mute capitalize">{currentSession.module} Module</p>
               </div>
             )}
+          </div>
+          <div className="flex items-center gap-3">
+            <UserButton />
           </div>
         </header>
 

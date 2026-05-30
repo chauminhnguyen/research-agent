@@ -14,3 +14,5 @@ langchain-openai
 langgraph
 chromadb
 jwt
+clerk-sdk
+clerk-backend-api

@@ -4,12 +4,23 @@ interface FetchOptions extends RequestInit {
   credentials?: RequestCredentials;
 }
 
+async function getClerkToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  
+  // @ts-expect-error - Clerk is loaded via script
+  const token = await window.Clerk?.session?.getToken();
+  return token || null;
+}
+
 async function apiFetch<T>(path: string, options?: FetchOptions): Promise<T> {
+  const token = await getClerkToken();
+  
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
   });
@@ -62,24 +73,9 @@ export interface MemoryHit {
   distance?: number;
 }
 
-export interface TokenResponse {
-  access_token: string;
-  token_type: string;
-}
-
 export const api = {
   auth: {
-    register: (email: string, password: string) =>
-      apiFetch<TokenResponse>("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      }),
-    login: (email: string, password: string) =>
-      apiFetch<TokenResponse>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      }),
-    me: () => apiFetch<User>("/auth/me"),
+    me: () => apiFetch<{ user_id: string; email?: string }>("/auth/me"),
   },
   sessions: {
     list: () => apiFetch<{ sessions: Session[] }>("/sessions"),

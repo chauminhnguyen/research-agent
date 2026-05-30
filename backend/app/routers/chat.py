@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 
-from app.auth.router import get_current_user
+from app.auth.clerk_auth import get_current_user
 from app.routers.chat_schemas import ChatRequest, ChatResponse
 from app.agent.graph import graph
 from app.agent.state import AgentState

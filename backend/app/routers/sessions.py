@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
-from app.auth.router import get_current_user
+from app.auth.clerk_auth import get_current_user
 from app.routers.sessions_schemas import SessionCreate, SessionUpdate, SessionResponse, SessionListResponse
 from app.memory.agent_memory import AgentMemory
 

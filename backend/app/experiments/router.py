@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.auth.router import get_current_user
+from app.auth.clerk_auth import get_current_user
 from app.experiments.store import experiment_store
 from app.experiments.schemas import (
     UserExperimentsResponse,

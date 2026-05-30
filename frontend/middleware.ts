@@ -1,31 +1,29 @@
+import { authMiddleware, redirectToSignIn } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get("token");
-  const { pathname } = request.nextUrl;
+// Define which routes require authentication
+const publicRoutes = ["/login", "/register", "/api/webhooks/clerk"];
 
-  // Public routes that don't require authentication
-  const publicRoutes = ["/login", "/register", "/"];
-  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
+export default authMiddleware({
+  publicRoutes,
+  afterAuth(auth, req, evt) {
+    // Allow public routes to pass through
+    if (auth.isPublicRoute) {
+      return NextResponse.next();
+    }
 
-  // If trying to access protected route without token, redirect to login
-  if (!token && !isPublicRoute) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // If authenticated and trying to access auth pages, redirect to chat
-  if (token && (pathname === "/login" || pathname === "/register")) {
-    return NextResponse.redirect(new URL("/chat", request.url));
-  }
-
-  return NextResponse.next();
-}
+    // Redirect unauthenticated users to sign in
+    if (!auth.userId) {
+      return redirectToSignIn({ returnBackUrl: req.url });
+    }
+  },
+});
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    // Skip Next.js internals and all static files, unless included in search params
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Always run for API routes
+    "/(api|trpc)(.*)",
   ],
 };
