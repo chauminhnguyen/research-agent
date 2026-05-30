@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     clerk_secret_key: str = ""
     clerk_publishable_key: str = ""
     clerk_jwks_url: str = ""
+    # Supabase
+    supabase_url: str = ""
+    supabase_service_key: str = ""
 
     model_config = SettingsConfigDict(env_file=".env")
 

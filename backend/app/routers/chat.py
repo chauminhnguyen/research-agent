@@ -1,105 +1,137 @@
+"""Chat endpoint for agent interactions."""
+
 import json
+import re
 from typing import AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
+from pydantic import BaseModel
+from langchain_core.messages import HumanMessage, AIMessage
 
-from app.auth.clerk_auth import get_current_user
-from app.routers.chat_schemas import ChatRequest, ChatResponse
-from app.agent.graph import graph
+from app.agent.ideas_agent import IDEAS_AGENT
+from app.agent.code_agent import CODE_AGENT
+from app.agent.paper_agent import PAPER_AGENT
 from app.agent.state import AgentState
-from app.memory.agent_memory import AgentMemory
+from app.db.supabase import (
+    get_shared_contexts,
+    insert_message,
+    is_supabase_available,
+)
+from app.auth.clerk_auth import get_current_user
 
-router = APIRouter(prefix="/v1/chat", tags=["chat"])
-memory = AgentMemory()
+router = APIRouter(prefix="/chat", tags=["chat"])
 
-
-def build_state(request: ChatRequest, user: dict) -> AgentState:
-    return AgentState(
-        messages=[HumanMessage(content=request.message)],
-        session_id=request.session_id,
-        user_id=user["id"],
-        active_topic=request.message[:100],
-        module=request.module,
-        tool_results=[],
-        memory_context=[]
-    )
+AGENTS = {
+    "ideas": IDEAS_AGENT,
+    "code": CODE_AGENT,
+    "paper": PAPER_AGENT,
+}
 
 
-async def event_generator(state: AgentState, request: ChatRequest, user_id: str) -> AsyncGenerator[str, None]:
-    try:
-        memory.save_chat_turn(
-            session_id=request.session_id,
-            role="user",
-            message=request.message,
-            user_id=user_id
-        )
-        
-        async for event in graph.astream_events(state, version="v1"):
-            event_type = event.get("event")
-            
-            if event_type == "on_chat_model_stream":
-                token = event.get("data", {}).get("chunk", {}).content
-                if token:
-                    yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-            
-            elif event_type == "on_chat_model_end":
-                response = event.get("data", {}).get("output", {})
-                if hasattr(response, "content"):
-                    memory.save_chat_turn(
-                        session_id=request.session_id,
-                        role="assistant",
-                        message=response.content,
-                        user_id=user_id
-                    )
-        
-        yield f"data: {json.dumps({'type': 'done', 'content': ''})}\n\n"
-    
-    except Exception as e:
-        yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+class ChatMessage(BaseModel):
+    role: str
+    content: str
 
 
-@router.post("/invoke", response_model=ChatResponse)
-async def invoke(request: ChatRequest, user: dict = Depends(get_current_user)) -> ChatResponse:
-    state = build_state(request, user)
+class ChatRequest(BaseModel):
+    folder_id: str
+    folder_type: str  # "ideas" | "code" | "paper"
+    session_id: str
+    user_id: str
+    messages: list[ChatMessage]
+
+
+async def event_generator(
+    agent,
+    state: AgentState,
+    folder_id: str,
+    folder_type: str,
+    session_id: str,
+) -> AsyncGenerator[str, None]:
+    """Generate SSE events from the agent stream."""
+    full_content = ""
     
     try:
-        result = await graph.ainvoke(state)
+        async for event in agent.astream_events(state, version="v2"):
+            if event["event"] == "on_chat_model_stream":
+                delta = event["data"]["chunk"].content
+                if delta:
+                    full_content += delta
+                    yield f"data: {json.dumps({'delta': delta})}\n\n"
+
+        # Parse <shareable> tag from Ideas agent
+        is_shareable = False
+        summary = None
         
-        messages = result.get("messages", [])
-        response_content = ""
-        for msg in reversed(messages):
-            if hasattr(msg, "content"):
-                response_content = msg.content
-                break
+        if folder_type == "ideas":
+            match = re.search(r"<shareable>(.*?)</shareable>", full_content, re.DOTALL)
+            is_shareable = bool(match)
+            summary = match.group(1).strip() if match else None
         
-        return ChatResponse(
-            content=response_content,
-            module=result.get("module", request.module),
-            session_id=request.session_id
-        )
+        # Clean content by removing <shareable> tags
+        clean_content = re.sub(r"<shareable>.*?</shareable>", "", full_content, flags=re.DOTALL).strip()
+        
+        # Persist assistant message if Supabase is available
+        if is_supabase_available():
+            try:
+                insert_message(
+                    folder_id=folder_id,
+                    role="assistant",
+                    content=clean_content,
+                    is_shareable=is_shareable
+                )
+            except Exception as e:
+                # Log but don't fail the stream
+                print(f"Failed to save message: {e}")
+
+        # Send shareable notification if applicable
+        if is_shareable and summary:
+            yield f"data: {json.dumps({'shareable': summary})}\n\n"
+        
+        yield "data: [DONE]\n\n"
     
     except Exception as e:
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+
+@router.post("")
+async def chat(req: ChatRequest):
+    """Stream chat responses from the appropriate agent."""
+    # Validate folder type
+    if req.folder_type not in AGENTS:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing request: {str(e)}"
+            status_code=400,
+            detail=f"Invalid folder_type: {req.folder_type}. Must be one of: {list(AGENTS.keys())}"
         )
-
-
-@router.post("/stream")
-async def stream(request: ChatRequest, user: dict = Depends(get_current_user)):
-    state = build_state(request, user)
     
-    session = memory.get_session(request.session_id)
-    if session is None:
-        session = memory.create_session(
-            user_id=user["id"],
-            topic=request.message[:100],
-            module=request.module
-        )
+    # Load pinned contexts for code/paper folders
+    pinned = []
+    if req.folder_type in ("code", "paper"):
+        if is_supabase_available():
+            pinned = get_shared_contexts(req.session_id, req.folder_type)
+    
+    # Convert messages to LangChain format
+    lc_messages = []
+    for m in req.messages:
+        if m.role == "user":
+            lc_messages.append(HumanMessage(content=m.content))
+        elif m.role == "assistant":
+            lc_messages.append(AIMessage(content=m.content))
+    
+    # Build agent state
+    state: AgentState = {
+        "messages": lc_messages,
+        "folder_type": req.folder_type,
+        "folder_id": req.folder_id,
+        "session_id": req.session_id,
+        "pinned_contexts": pinned,
+    }
+    
+    agent = AGENTS[req.folder_type]
     
     return StreamingResponse(
-        event_generator(state, request, user["id"]),
+        event_generator(agent, state, req.folder_id, req.folder_type, req.session_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

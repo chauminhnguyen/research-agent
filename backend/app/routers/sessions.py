@@ -1,144 +1,111 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+"""Session management endpoints."""
 
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from app.db.supabase import (
+    insert_session,
+    insert_folders_for_session,
+    list_sessions,
+    get_session,
+    is_supabase_available,
+)
 from app.auth.clerk_auth import get_current_user
-from app.routers.sessions_schemas import SessionCreate, SessionUpdate, SessionResponse, SessionListResponse
-from app.memory.agent_memory import AgentMemory
 
-router = APIRouter(prefix="/v1/sessions", tags=["sessions"])
-memory = AgentMemory()
+router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
-@router.get("", response_model=SessionListResponse)
-async def list_sessions(
-    limit: int = Query(20, ge=1, le=100, description="Maximum number of sessions to return"),
-    offset: int = Query(0, ge=0, description="Number of sessions to skip"),
-    user: dict = Depends(get_current_user)
-) -> SessionListResponse:
-    sessions, total = memory.list_sessions_paginated(user["id"], limit, offset)
-    return SessionListResponse(
-        sessions=[SessionResponse(**s) for s in sessions],
-        total=total,
-        limit=limit,
-        offset=offset
+class SessionCreate(BaseModel):
+    title: str
+
+
+class FolderInfo(BaseModel):
+    id: str
+    type: str
+    created_at: str
+
+
+class SessionResponse(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    stage: str
+    created_at: str
+    folders: list[FolderInfo]
+
+
+@router.post("", response_model=SessionResponse)
+async def create_session(req: SessionCreate, user: dict = None):
+    """Create a new session with all three folders."""
+    if not is_supabase_available():
+        raise HTTPException(status_code=503, detail="Database not configured")
+    
+    user_id = user.get("id") if user else None
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    session = insert_session(user_id=user_id, title=req.title)
+    folders = insert_folders_for_session(session_id=session["id"])
+    
+    return SessionResponse(
+        id=session["id"],
+        user_id=session["user_id"],
+        title=session["title"],
+        stage=session.get("stage", "ideation"),
+        created_at=session["created_at"],
+        folders=[FolderInfo(id=f["id"], type=f["type"], created_at=f["created_at"]) for f in folders]
     )
 
 
-@router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
-async def create_session(request: SessionCreate, user: dict = Depends(get_current_user)) -> SessionResponse:
-    session = memory.create_session(
-        user_id=user["id"],
-        topic=request.topic,
-        module=request.module
-    )
-    return SessionResponse(**session)
+@router.get("", response_model=list[SessionResponse])
+async def list_user_sessions(user: dict = None):
+    """List all sessions for the current user."""
+    if not is_supabase_available():
+        raise HTTPException(status_code=503, detail="Database not configured")
+    
+    user_id = user.get("id") if user else None
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    sessions = list_sessions(user_id)
+    
+    result = []
+    for s in sessions:
+        folders = s.get("folders", [])
+        result.append(SessionResponse(
+            id=s["id"],
+            user_id=s["user_id"],
+            title=s["title"],
+            stage=s.get("stage", "ideation"),
+            created_at=s["created_at"],
+            folders=[FolderInfo(id=f["id"], type=f["type"], created_at=f["created_at"]) for f in folders]
+        ))
+    
+    return result
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: str, user: dict = Depends(get_current_user)) -> SessionResponse:
-    session = memory.get_session(session_id)
+async def get_session_by_id(session_id: str, user: dict = None):
+    """Get a single session by ID."""
+    if not is_supabase_available():
+        raise HTTPException(status_code=503, detail="Database not configured")
     
-    if session is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
+    user_id = user.get("id") if user else None
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
-    if session["user_id"] != user["id"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this session"
-        )
+    session = get_session(session_id, user_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
     
-    return SessionResponse(**session)
-
-
-@router.get("/{session_id}/history")
-async def get_session_history(
-    session_id: str,
-    limit: int = Query(50, ge=1, le=200, description="Maximum number of events to return"),
-    offset: int = Query(0, ge=0, description="Number of events to skip"),
-    user: dict = Depends(get_current_user)
-) -> dict:
-    session = memory.get_session(session_id)
-    
-    if session is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
-    
-    if session["user_id"] != user["id"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this session"
-        )
-    
-    events, total = memory.get_session_history(session_id, limit, offset)
-    return {
-        "session": SessionResponse(**session),
-        "events": [
-            {
-                "id": e.event_id,
-                "event_type": e.event_type,
-                "content": e.content,
-                "created_at": e.created_at
-            }
-            for e in events
-        ],
-        "total": total,
-        "limit": limit,
-        "offset": offset
-    }
-
-
-@router.patch("/{session_id}", response_model=SessionResponse)
-async def update_session(
-    session_id: str,
-    request: SessionUpdate,
-    user: dict = Depends(get_current_user)
-) -> SessionResponse:
-    session = memory.get_session(session_id)
-    
-    if session is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
-    
-    if session["user_id"] != user["id"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to update this session"
-        )
-    
-    update_data = {}
-    if request.topic is not None:
-        update_data["topic"] = request.topic
-    if request.module is not None:
-        update_data["module"] = request.module
-    
-    if update_data:
-        memory.store.update_session(session_id, **update_data)
-    
-    updated_session = memory.get_session(session_id)
-    return SessionResponse(**updated_session)
-
-
-@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_session(session_id: str, user: dict = Depends(get_current_user)) -> None:
-    session = memory.get_session(session_id)
-    
-    if session is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
-    
-    if session["user_id"] != user["id"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to delete this session"
-        )
-    
-    memory.delete_session(session_id)
-    return None
+    folders = session.get("folders", [])
+    return SessionResponse(
+        id=session["id"],
+        user_id=session["user_id"],
+        title=session["title"],
+        stage=session.get("stage", "ideation"),
+        created_at=session["created_at"],
+        folders=[FolderInfo(id=f["id"], type=f["type"], created_at=f["created_at"]) for f in folders]
+    )

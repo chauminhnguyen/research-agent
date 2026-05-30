@@ -1,5 +1,4 @@
 import uuid
-import os
 import logging
 from contextlib import asynccontextmanager
 
@@ -16,8 +15,7 @@ from app.auth.router import router as auth_router
 from app.routers.chat import router as chat_router
 from app.routers.sessions import router as sessions_router
 from app.routers.memory import router as memory_router
-from app.memory.session_store import init_memory_tables
-from app.experiments.router import router as experiments_router
+from app.routers.share import router as share_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,14 +24,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up Research Agent API...")
-    
-    os.makedirs("data", exist_ok=True)
-    
-    init_memory_tables()
-    logger.info("Database tables initialized")
-    
     yield
-    
     logger.info("Shutting down Research Agent API...")
 
 
@@ -73,7 +64,7 @@ app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(sessions_router)
 app.include_router(memory_router)
-app.include_router(experiments_router)
+app.include_router(share_router)
 
 
 @app.exception_handler(Exception)

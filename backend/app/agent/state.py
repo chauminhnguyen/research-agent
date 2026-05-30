@@ -1,12 +1,11 @@
-from typing import TypedDict, Annotated, Literal
+from typing import Annotated, TypedDict
 from langgraph.graph.message import add_messages
 
 
 class AgentState(TypedDict):
+    """State for the research agent."""
     messages: Annotated[list, add_messages]
+    folder_type: str          # "ideas" | "code" | "paper"
+    folder_id: str
     session_id: str
-    user_id: str
-    active_topic: str
-    module: Literal["ideas", "coding", "paper"]
-    tool_results: list[dict]
-    memory_context: list[dict]
+    pinned_contexts: list[str]  # summaries from shared_contexts

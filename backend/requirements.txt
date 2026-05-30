@@ -16,3 +16,4 @@ chromadb
 jwt
 clerk-sdk
 clerk-backend-api
+supabase

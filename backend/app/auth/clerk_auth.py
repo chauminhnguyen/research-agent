@@ -3,7 +3,13 @@ from functools import lru_cache
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
-from clerk_backend_api import Clerk
+try:
+    from clerk_backend_api import Clerk
+except ImportError:
+    try:
+        from clerk_sdk import Clerk
+    except ImportError:
+        Clerk = None
 # from clerk_backend_api.types import JWTClaim
 
 from app.config import get_settings
