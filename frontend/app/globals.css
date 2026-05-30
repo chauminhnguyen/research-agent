@@ -16,6 +16,9 @@
   --color-hairline: #ebebeb;
   --color-hairline-strong: #a1a1a1;
   --color-cyan: #50e3c2;
+  --color-cyan: #50e3c2;
+  --color-cyan-soft: rgba(80, 227, 194, 0.1);
+  --color-cyan-mid: rgba(80, 227, 194, 0.2);
   --color-highlight-pink: #ff0080;
   --color-violet: #7928ca;
   --color-link: #0070f3;
