@@ -1,23 +1,20 @@
-import { createServerClient } from "@/lib/supabase";
+import { auth } from "@clerk/nextjs/server";
 
 const AGENT_API_URL = process.env.AGENT_API_URL || "http://localhost:8000";
 
 export async function POST(req: Request) {
-  const supabase = createServerClient();
   const body = await req.json();
 
-  // Add user_id from session if not provided
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Get Clerk user ID
+  const { userId } = await auth();
 
-  if (!user) {
+  if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const requestBody = {
     ...body,
-    user_id: user.id,
+    user_id: userId,
   };
 
   // Forward to FastAPI and stream back

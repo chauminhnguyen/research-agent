@@ -1,4 +1,3 @@
-import { createServerClient } from "@/lib/supabase";
 import type { Session, Folder, Message, SharedContext, ChatMessage } from "@/lib/types";
 
 const BASE = process.env.AGENT_API_URL || "http://localhost:8000";
@@ -30,15 +29,9 @@ export const api = {
 
   folders: {
     getMessages: async (folderId: string): Promise<Message[]> => {
-      const supabase = createServerClient();
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("folder_id", folderId)
-        .order("created_at", { ascending: true });
-
-      if (error) throw new Error(error.message);
-      return data || [];
+      const res = await fetch(`/api/messages?folder_id=${encodeURIComponent(folderId)}`);
+      if (!res.ok) throw new Error("Failed to fetch messages");
+      return res.json();
     },
   },
 
@@ -66,16 +59,13 @@ export const api = {
       sessionId: string,
       targetFolder: "code" | "paper"
     ): Promise<SharedContext[]> => {
-      const supabase = createServerClient();
-      const { data, error } = await supabase
-        .from("shared_contexts")
-        .select("*")
-        .eq("session_id", sessionId)
-        .eq("target_folder", targetFolder)
-        .order("pinned_order", { ascending: true });
-
-      if (error) throw new Error(error.message);
-      return data || [];
+      const params = new URLSearchParams({
+        session_id: sessionId,
+        target_folder: targetFolder,
+      });
+      const res = await fetch(`/api/shared-contexts?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch shared contexts");
+      return res.json();
     },
   },
 };

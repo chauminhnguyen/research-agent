@@ -9,9 +9,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
 
-from app.agent.ideas_agent import IDEAS_AGENT
-from app.agent.code_agent import CODE_AGENT
-from app.agent.paper_agent import PAPER_AGENT
 from app.agent.state import AgentState
 from app.db.supabase import (
     get_shared_contexts,
@@ -22,10 +19,11 @@ from app.auth.clerk_auth import get_current_user
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-AGENTS = {
-    "ideas": IDEAS_AGENT,
-    "code": CODE_AGENT,
-    "paper": PAPER_AGENT,
+# Lazy-loading agent registry
+_AGENT_GETTERS = {
+    "ideas": lambda: __import__("app.agent.ideas_agent", fromlist=["IDEAS_AGENT"]).IDEAS_AGENT,
+    "code": lambda: __import__("app.agent.code_agent", fromlist=["CODE_AGENT"]).CODE_AGENT,
+    "paper": lambda: __import__("app.agent.paper_agent", fromlist=["PAPER_AGENT"]).PAPER_AGENT,
 }
 
 
@@ -99,11 +97,24 @@ async def event_generator(
 async def chat(req: ChatRequest):
     """Stream chat responses from the appropriate agent."""
     # Validate folder type
-    if req.folder_type not in AGENTS:
+    if req.folder_type not in _AGENT_GETTERS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid folder_type: {req.folder_type}. Must be one of: {list(AGENTS.keys())}"
+            detail=f"Invalid folder_type: {req.folder_type}. Must be one of: {list(_AGENT_GETTERS.keys())}"
         )
+    
+    # Save user message first if Supabase is available
+    user_msg_id = None
+    if is_supabase_available():
+        try:
+            user_msg_id = insert_message(
+                folder_id=req.folder_id,
+                role="user",
+                content=req.messages[-1].content if req.messages else "",
+                is_shareable=False
+            )
+        except Exception as e:
+            print(f"Failed to save user message: {e}")
     
     # Load pinned contexts for code/paper folders
     pinned = []
@@ -128,7 +139,7 @@ async def chat(req: ChatRequest):
         "pinned_contexts": pinned,
     }
     
-    agent = AGENTS[req.folder_type]
+    agent = _AGENT_GETTERS[req.folder_type]()
     
     return StreamingResponse(
         event_generator(agent, state, req.folder_id, req.folder_type, req.session_id),

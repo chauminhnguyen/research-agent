@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { Search, Clock, FileText, Lightbulb, Code, BookOpen } from "lucide-react";
-import { api, type MemoryHit } from "@/lib/api";
+import { api } from "@/lib/api";
+import { type MemoryHit } from "@/lib/types";
 
 interface MemoryPanelProps {
   sessionId?: string;

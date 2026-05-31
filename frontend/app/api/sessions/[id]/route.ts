@@ -1,11 +1,11 @@
-import { createServerClient } from "@/lib/supabase";
+import { createServerClient } from "@/lib/supabase-server";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
 
   const { data: session, error } = await supabase
     .from("sessions")

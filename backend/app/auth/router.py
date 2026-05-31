@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.auth.clerk_auth import get_current_user, get_clerk_client, decode_jwt_manually
+from app.auth.clerk_auth import get_current_user, decode_jwt_manually
 from app.auth.schemas import UserResponse
 from app.config import get_settings
 
-settings = get_settings()
 security = HTTPBearer(auto_error=False)
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
@@ -35,6 +34,7 @@ async def verify_token(
         return {"valid": False, "error": "No token provided"}
     
     token = credentials.credentials
+    settings = get_settings()
     
     # Try Clerk verification
     if settings.clerk_secret_key:

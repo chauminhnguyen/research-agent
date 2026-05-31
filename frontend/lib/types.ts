@@ -1,5 +1,3 @@
-"use client";
-
 export interface Message {
   id: string;
   folder_id?: string;
@@ -52,4 +50,15 @@ export interface FolderMessages {
   ideas: Message[];
   code: Message[];
   paper: Message[];
+}
+
+export interface MemoryHit {
+  id: string;
+  content: string;
+  score: number;
+  metadata?: {
+    session_id?: string;
+    folder_id?: string;
+    created_at?: string;
+  };
 }

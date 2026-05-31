@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { auth } from "@clerk/nextjs/server";
 
 export interface AuthState {
   user: { id: string; email: string } | null;
@@ -6,47 +6,19 @@ export interface AuthState {
 }
 
 export async function getToken(): Promise<string | null> {
-  try {
-    const response = await fetch("/api/auth/token", {
-      method: "POST",
-      credentials: "include",
-    });
-    if (response.ok) {
-      const data = await response.json();
-      return data.token;
-    }
-  } catch {
-    // Cookie not available
-  }
-  return null;
+  return null; // Clerk handles auth tokens automatically
 }
 
 export async function isAuthenticated(): Promise<boolean> {
-  try {
-    await api.auth.me();
-    return true;
-  } catch {
-    return false;
-  }
+  const { userId } = await auth();
+  return userId !== null;
 }
 
 export async function logout(): Promise<void> {
-  try {
-    await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "include",
-    });
-  } finally {
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
-  }
+  // Clerk handles logout via SignIn component or window.location.href = "/sign-out"
 }
 
 export async function getCurrentUser() {
-  try {
-    return await api.auth.me();
-  } catch {
-    return null;
-  }
+  const { userId } = await auth();
+  return userId ? { id: userId } : null;
 }

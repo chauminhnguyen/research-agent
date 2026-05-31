@@ -9,9 +9,6 @@ from app.agent.state import AgentState
 from app.config import get_settings
 
 
-settings = get_settings()
-
-
 def build_agent(system_prompt: str):
     """
     Build a simple ReAct agent graph with the given system prompt.
@@ -19,6 +16,8 @@ def build_agent(system_prompt: str):
     Graph structure: START -> call_model -> END
     No tools for MVP.
     """
+    settings = get_settings()
+    
     llm = ChatOpenAI(
         model="gpt-4o-mini",
         temperature=0.3,

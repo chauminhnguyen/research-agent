@@ -1,8 +1,8 @@
-import { createServerClient } from "@/lib/supabase";
+import { createServerClient } from "@/lib/supabase-server";
 import { auth } from "@clerk/nextjs/server";
 
 export async function GET() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   
   const { data: sessions, error } = await supabase
     .from("sessions")
@@ -17,7 +17,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   const { title } = await req.json();
   
   // Get Clerk user ID
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const { data: session, error } = await supabase
     .from("sessions")
     .insert({ title, user_id: userId })
-    .select()
+    .select("*, folders(id, type, created_at)")
     .single();
 
   if (error) {
