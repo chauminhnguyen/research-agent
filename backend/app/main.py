@@ -16,6 +16,7 @@ from app.routers.chat import router as chat_router
 from app.routers.sessions import router as sessions_router
 from app.routers.memory import router as memory_router
 from app.routers.share import router as share_router
+from app.routers.papers import router as papers_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,6 +25,16 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up Research Agent API...")
+
+    # Configure LangSmith if enabled
+    settings = get_settings()
+    if settings.langsmith_callback_enabled and settings.langsmith_configured:
+        from app.observability.langsmith import configure_langsmith_environment
+        configure_langsmith_environment()
+        logger.info(f"LangSmith tracing enabled for project: {settings.langsmith_project}")
+    else:
+        logger.info("LangSmith tracing disabled or not configured")
+
     yield
     logger.info("Shutting down Research Agent API...")
 
@@ -65,6 +76,7 @@ app.include_router(chat_router)
 app.include_router(sessions_router)
 app.include_router(memory_router)
 app.include_router(share_router)
+app.include_router(papers_router)
 
 
 @app.exception_handler(Exception)

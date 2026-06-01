@@ -10,7 +10,10 @@ import { UserButton } from "@/components/auth/UserButton";
 import { api } from "@/lib/api";
 import { type Session, type Folder, type Message, type SharedContext } from "@/lib/types";
 import { useUser } from "@clerk/clerk-react";
-import { Plus, MessageSquare, Settings, Menu } from "lucide-react";
+import { Plus, MessageSquare, Settings, Menu, Lightbulb } from "lucide-react";
+import { IdeasPanel } from "@/components/ideas/IdeasPanel";
+import { PaperDiscoveryPanel } from "@/components/paper/PaperDiscoveryPanel";
+import { PaperReader } from "@/components/paper/PaperReader";
 
 const FOLDER_LABELS = {
   ideas: "Ideas",
@@ -60,6 +63,14 @@ export function ChatPageClient({ initialSessions }: ChatPageClientProps) {
   const [isLoading, setIsLoading] = React.useState(false);
   const [showSidebar, setShowSidebar] = React.useState(true);
   const [shareableIdeas, setShareableIdeas] = React.useState<Map<string, string>>(new Map());
+  const [showIdeasPanel, setShowIdeasPanel] = React.useState(false);
+  const [selectedPaperId, setSelectedPaperId] = React.useState<string | null>(null);
+  const [searchResults, setSearchResults] = React.useState<{query: string, papers: any[]} | null>(null);
+
+  // Clear search results when folder changes
+  React.useEffect(() => {
+    setSearchResults(null);
+  }, [currentFolder]);
 
   // Load sessions on mount
   React.useEffect(() => {
@@ -159,6 +170,7 @@ export function ChatPageClient({ initialSessions }: ChatPageClientProps) {
     };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
+    setSearchResults(null); // Clear previous search results
 
     try {
       const body = {
@@ -181,6 +193,7 @@ export function ChatPageClient({ initialSessions }: ChatPageClientProps) {
       const decoder = new TextDecoder();
       let assistantContent = "";
       let shareable: string | null = null;
+      let papersData: any = null;
 
       while (true) {
         const { done, value } = await reader!.read();
@@ -223,12 +236,22 @@ export function ChatPageClient({ initialSessions }: ChatPageClientProps) {
                 });
               } else if (data.shareable) {
                 shareable = data.shareable;
+              } else if (data.papers) {
+                papersData = data.papers;
               }
             } catch (e) {
               // Skip invalid JSON
             }
           }
         }
+      }
+
+      // Handle paper search results - show as interactive cards
+      if (papersData && papersData.new_papers && papersData.new_papers.length > 0) {
+        setSearchResults({
+          query: papersData.query || "",
+          papers: papersData.new_papers
+        });
       }
 
       // Add shareable idea to state if present
@@ -437,7 +460,26 @@ export function ChatPageClient({ initialSessions }: ChatPageClientProps) {
               </h1>
             )}
           </div>
-          <UserButton />
+          <div className="flex items-center gap-2">
+            {currentFolder === "ideas" && currentSession && (
+              <button
+                onClick={() => setShowIdeasPanel(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors text-xs"
+                style={{
+                  background: "#171717",
+                  color: "#ffffff",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#2a2a2a")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#171717")}
+              >
+                <Lightbulb className="w-3.5 h-3.5" />
+                My Work
+              </button>
+            )}
+            <UserButton />
+          </div>
         </header>
 
         {/* Folder Tabs */}
@@ -502,20 +544,51 @@ export function ChatPageClient({ initialSessions }: ChatPageClientProps) {
 
         {/* Chat Area */}
         <div className="flex-1 overflow-hidden flex flex-col">
-          <div className="w-full max-w-[600px] mx-auto flex flex-col flex-1 min-h-0">
-            <FolderChat
-              messages={messages}
-              isLoading={isLoading}
-              currentFolder={currentFolder}
-              shareableIdeas={shareableIdeas}
-              onShare={handleShare}
-            />
-            <InputBar
-              onSend={handleSend}
-              isLoading={isLoading}
-              selectedModule={currentFolder}
-              onModuleChange={setCurrentFolder}
-            />
+          <div className="flex flex-1 min-h-0">
+            <div className="flex-1 flex flex-col max-w-[600px] mx-auto">
+              <FolderChat
+                messages={messages}
+                isLoading={isLoading}
+                currentFolder={currentFolder}
+                shareableIdeas={shareableIdeas}
+                onShare={handleShare}
+                searchResults={searchResults}
+                onPaperClick={(paper) => {
+                  console.log("Paper clicked:", paper);
+                }}
+              />
+              <InputBar
+                onSend={handleSend}
+                isLoading={isLoading}
+                selectedModule={currentFolder}
+                onModuleChange={(module) => setCurrentFolder(module as "ideas" | "code" | "paper")}
+              />
+            </div>
+
+            {/* Side Panel (Ideas or Papers) */}
+            {currentSession && (
+              <>
+                {selectedPaperId ? (
+                  <PaperReader
+                    paperId={selectedPaperId}
+                    onClose={() => setSelectedPaperId(null)}
+                  />
+                ) : currentFolder === "ideas" && showIdeasPanel ? (
+                  <IdeasPanel
+                    sessionId={currentSession.id}
+                    isOpen={showIdeasPanel}
+                    onClose={() => setShowIdeasPanel(false)}
+                  />
+                ) : currentFolder === "paper" ? (
+                  <div className="w-80 border-l bg-white flex flex-col">
+                    <PaperDiscoveryPanel
+                      sessionId={currentSession.id}
+                      onPaperSelect={(id) => setSelectedPaperId(id)}
+                    />
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       </main>

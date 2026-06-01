@@ -5,12 +5,21 @@ import { MessageBubble } from "./MessageBubble";
 import { SharePopover } from "./SharePopover";
 import type { Message } from "@/lib/types";
 
+interface Paper {
+  title: string;
+  url: string;
+  abstract?: string;
+  note?: string;
+}
+
 interface FolderChatProps {
   messages: Message[];
   isLoading: boolean;
   currentFolder: "ideas" | "code" | "paper";
   shareableIdeas?: Map<string, string>;
   onShare?: (messageId: string, targetFolder: "code" | "paper", summary: string) => void;
+  searchResults?: { query: string; papers: Paper[] } | null;
+  onPaperClick?: (paper: Paper) => void;
 }
 
 export function FolderChat({
@@ -19,6 +28,8 @@ export function FolderChat({
   currentFolder,
   shareableIdeas = new Map(),
   onShare,
+  searchResults,
+  onPaperClick,
 }: FolderChatProps) {
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
@@ -127,6 +138,89 @@ export function FolderChat({
           )}
         </div>
       ))}
+
+      {/* Paper Search Results */}
+      {searchResults && searchResults.papers.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center gap-2 mb-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#50e3c2" strokeWidth="2">
+              <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" />
+              <path d="M14 2V8H20" />
+            </svg>
+            <span className="text-sm font-medium" style={{ color: "#171717" }}>
+              Papers Found ({searchResults.papers.length})
+            </span>
+          </div>
+
+          {searchResults.papers.map((paper, idx) => (
+            <div
+              key={idx}
+              className="rounded-lg p-3 cursor-pointer transition-all hover:shadow-md"
+              style={{
+                background: "#ffffff",
+                border: "1px solid #ebebeb",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+              }}
+              onClick={() => {
+                window.open(paper.url, "_blank");
+                onPaperClick?.(paper);
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className="w-8 h-8 rounded flex-shrink-0 flex items-center justify-center"
+                  style={{ background: "rgba(80, 227, 194, 0.1)" }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#50e3c2" strokeWidth="2">
+                    <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" />
+                    <path d="M14 2V8H20" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4
+                    className="text-sm font-medium mb-1 line-clamp-2"
+                    style={{ color: "#171717", lineHeight: "1.4" }}
+                  >
+                    {paper.title}
+                  </h4>
+                  {paper.abstract && (
+                    <p
+                      className="text-xs mb-2 line-clamp-2"
+                      style={{ color: "#4d4d4d", lineHeight: "1.5" }}
+                    >
+                      {paper.abstract}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="text-xs px-2 py-0.5 rounded"
+                      style={{
+                        background: "#f5f5f5",
+                        color: "#888888",
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {new URL(paper.url).hostname.replace("www.", "")}
+                    </span>
+                    {paper.note && (
+                      <span className="text-xs" style={{ color: "#50e3c2" }}>
+                        {paper.note}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-shrink-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888888" strokeWidth="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {isLoading && (
         <div className="flex justify-start">

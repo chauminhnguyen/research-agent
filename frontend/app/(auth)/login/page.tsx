@@ -37,7 +37,7 @@ export default function LoginPage() {
       // If showing second factor input, verify the code
       if (showSecondFactor) {
         const result = await signIn.attemptSecondFactor({
-          strategy: "email_code",
+          strategy: "phone_code",
           code: code,
         });
 
@@ -63,8 +63,9 @@ export default function LoginPage() {
         router.refresh();
       } else if (result.status === "needs_second_factor") {
         // 2FA is required - prepare the second factor first
+        // Note: Clerk prepareSecondFactor only supports phone_code in this API version
         await signIn.prepareSecondFactor({
-          strategy: "email_code",
+          strategy: "phone_code",
         });
         setShowSecondFactor(true);
         setError("");
@@ -184,7 +185,7 @@ export default function LoginPage() {
                     inputMode="numeric"
                     pattern="[0-9]*"
                     autoComplete="one-time-code"
-                    placeholder="Enter 6-digit code"
+                    placeholder="Enter 6-digit code from your phone"
                     value={code}
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     required

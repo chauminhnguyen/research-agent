@@ -6,7 +6,7 @@ import { ChatWindow } from "@/components/chat/ChatWindow";
 import { InputBar } from "@/components/chat/InputBar";
 import { MemoryPanel } from "@/components/memory/MemoryPanel";
 import { api } from "@/lib/api";
-import { type Session, type ChatRequest } from "@/lib/types";
+import { type Session } from "@/lib/types";
 import { ArrowLeft, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -15,7 +15,6 @@ interface Message {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  module?: string;
   timestamp: Date;
   toolCalls?: Array<{
     tool: string;
@@ -44,25 +43,19 @@ export default function SessionChatPage() {
     try {
       const sessionData = await api.sessions.get(sessionId);
       setSession(sessionData);
-      setSelectedModule(sessionData.module);
       
-      const history = await api.sessions.history(sessionId);
-      const loadedMessages: Message[] = [];
-      
-      for (const event of history.events) {
-        const e = event as { event_type: string; content: { role?: string; message?: string } };
-        if (e.event_type === "chat_turn" && e.content?.role && e.content?.message) {
-          loadedMessages.push({
-            id: `msg-${loadedMessages.length}`,
-            role: e.content.role as "user" | "assistant",
-            content: e.content.message,
-            module: sessionData.module,
-            timestamp: new Date(),
-          });
-        }
+      // Load messages from the ideas folder (default)
+      const ideasFolder = sessionData.folders?.find((f: { type: string }) => f.type === "ideas");
+      if (ideasFolder) {
+        const folderMessages = await api.folders.getMessages(ideasFolder.id);
+        const loadedMessages: Message[] = folderMessages.map((msg) => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+        }));
+        setMessages(loadedMessages);
       }
-      
-      setMessages(loadedMessages);
     } catch (error) {
       console.error("Failed to load session:", error);
       router.push("/chat");
@@ -71,32 +64,37 @@ export default function SessionChatPage() {
     }
   };
 
-  const handleSend = async (messageText: string, module: string) => {
+  const handleSend = async (messageText: string, folderType: string) => {
+    if (!session) return;
+    
     setIsLoading(true);
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: "user",
       content: messageText,
-      module,
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMessage]);
 
     try {
-      const body: ChatRequest = {
-        message: messageText,
-        session_id: sessionId,
-        module: module as "ideas" | "coding" | "paper",
-      };
+      const folder = session.folders?.find((f: { type: string }) => f.type === folderType);
+      if (!folder) {
+        throw new Error(`Folder not found: ${folderType}`);
+      }
 
-      const response = await fetch(api.chat.streamUrl(body), {
+      const response = await fetch(api.chat.streamUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          folder_id: folder.id,
+          folder_type: folderType as "ideas" | "code" | "paper",
+          session_id: sessionId,
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        }),
       });
 
       const reader = response.body?.getReader();
@@ -105,7 +103,6 @@ export default function SessionChatPage() {
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content: "",
-        module,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -204,8 +201,8 @@ export default function SessionChatPage() {
             </button>
             {session && (
               <div>
-                <h1 className="font-medium text-ink">{session.topic}</h1>
-                <p className="text-xs text-mute capitalize">{session.module} Module</p>
+                <h1 className="font-medium text-ink">{session.title}</h1>
+                <p className="text-xs text-mute capitalize">{selectedModule} folder</p>
               </div>
             )}
           </div>

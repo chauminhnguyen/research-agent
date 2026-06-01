@@ -9,3 +9,4 @@ class AgentState(TypedDict):
     folder_id: str
     session_id: str
     pinned_contexts: list[str]  # summaries from shared_contexts
+    remaining_steps: int  # Required by create_react_agent for max iterations

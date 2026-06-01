@@ -2,7 +2,7 @@ import { authMiddleware, redirectToSignIn } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 // Define which routes require authentication
-const publicRoutes = ["/login", "/register", "/api/webhooks/clerk"];
+const publicRoutes = ["/login", "/register", "/api/webhooks/clerk", "/sso-callback"];
 
 export default authMiddleware({
   publicRoutes,

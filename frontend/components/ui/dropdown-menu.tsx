@@ -47,9 +47,11 @@ export function DropdownMenuTrigger({ children, asChild }: { children: React.Rea
 export function DropdownMenuContent({
   children,
   align = "end",
+  className,
 }: {
   children: React.ReactNode;
   align?: "start" | "end";
+  className?: string;
 }) {
   const { open, setOpen } = useDropdownMenuContext();
   const ref = React.useRef<HTMLDivElement>(null);
@@ -77,7 +79,8 @@ export function DropdownMenuContent({
       ref={ref}
       className={cn(
         "absolute z-50 mt-2 min-w-[8rem] overflow-hidden rounded-sm border border-hairline bg-canvas shadow-float animate-in fade-in-0 zoom-in-95",
-        align === "end" ? "right-0" : "left-0"
+        align === "end" ? "right-0" : "left-0",
+        className
       )}
     >
       <div className="p-1">{children}</div>
@@ -89,10 +92,12 @@ export function DropdownMenuItem({
   children,
   onClick,
   className,
+  asChild,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
+  asChild?: boolean;
 }) {
   const { setOpen } = useDropdownMenuContext();
 
@@ -100,6 +105,12 @@ export function DropdownMenuItem({
     onClick?.();
     setOpen(false);
   };
+
+  if (asChild && React.isValidElement(children)) {
+    return React.cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
+      onClick: handleClick,
+    });
+  }
 
   return (
     <button

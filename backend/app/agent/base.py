@@ -1,50 +1,114 @@
-"""Base agent builder for all three folder types."""
+"""Base agent builder for all three folder types with LangGraph ReAct agents."""
 
-from typing import Optional
+from typing import Optional, Annotated, Literal, Callable
 from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, AIMessage
+from langchain_core.messages import SystemMessage, AIMessage, BaseMessage, HumanMessage
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.tools import BaseTool
+from langchain_core.callbacks import BaseCallbackHandler
 
 from app.agent.state import AgentState
+from app.agent.tools import TOOL_LIST
 from app.config import get_settings
 
 
-def build_agent(system_prompt: str):
+def build_agent(
+    system_prompt: str,
+    tools: Optional[list[BaseTool]] = None,
+    model_name: str = "gpt-4o-mini",
+    callbacks: Optional[list[BaseCallbackHandler]] = None
+) -> StateGraph:
     """
-    Build a simple ReAct agent graph with the given system prompt.
-    
-    Graph structure: START -> call_model -> END
-    No tools for MVP.
+    Build a LangGraph ReAct agent with tools.
+
+    Graph structure: START -> agent -> END (with tool calls handled automatically)
+    Uses create_react_agent for proper tool-calling with bound tools.
+
+    Args:
+        system_prompt: System prompt for the agent
+        tools: List of tools to give the agent (default: TOOL_LIST)
+        model_name: LLM model to use (default: gpt-4o-mini)
+        callbacks: Optional list of callback handlers for tracing
     """
     settings = get_settings()
-    
+
+    # Determine which tools to use
+    agent_tools = tools if tools is not None else TOOL_LIST
+
+    # Create the LLM with tools bound
     llm = ChatOpenAI(
-        model="gpt-4o-mini",
+        model=model_name,
         temperature=0.3,
         streaming=True,
         api_key=settings.openai_api_key
     )
 
-    def call_model(state: AgentState) -> dict:
-        pinned = state.get("pinned_contexts", [])
-        
-        # Build context block from pinned ideas
-        context_block = ""
-        if pinned:
-            items = "\n".join(f"- {s}" for s in pinned)
-            context_block = f"\n\n[PINNED IDEAS - accepted by user]\n{items}\n"
+    # Bind tools to the model
+    llm_with_tools = llm.bind_tools(agent_tools)
 
-        full_system = SystemMessage(content=system_prompt + context_block)
-        
-        # Build message list with system prompt first
-        chat_messages = [full_system] + list(state["messages"])
-        response = llm.invoke(chat_messages)
-        
-        return {"messages": [response]}
+    # Create the ReAct agent graph
+    graph = create_react_agent(
+        model=llm_with_tools,
+        tools=agent_tools,
+        state_schema=AgentState,
+        prompt=system_prompt,
+        debug=settings.environment == "development"
+    )
 
-    graph = StateGraph(AgentState)
-    graph.add_node("call_model", call_model)
-    graph.add_edge(START, "call_model")
-    graph.add_edge("call_model", END)
-    
-    return graph.compile()
+    return graph
+
+
+def create_traced_agent(
+    system_prompt: str,
+    session_id: str,
+    folder_type: str,
+    user_id: Optional[str] = None,
+    tools: Optional[list[BaseTool]] = None,
+    model_name: str = "gpt-4o-mini"
+) -> tuple[StateGraph, list[BaseCallbackHandler]]:
+    """
+    Create an agent with LangSmith tracing enabled.
+
+    Args:
+        system_prompt: System prompt for the agent
+        session_id: Current session ID for tracing
+        folder_type: Current folder type (ideas/code/paper)
+        user_id: Current user ID for tracing
+        tools: List of tools to give the agent
+        model_name: LLM model to use
+
+    Returns:
+        Tuple of (compiled graph, callbacks list)
+    """
+    from app.observability.langsmith import get_langsmith_callbacks
+
+    callbacks = get_langsmith_callbacks(
+        session_id=session_id,
+        folder_type=folder_type,
+        user_id=user_id
+    )
+
+    graph = build_agent(
+        system_prompt=system_prompt,
+        tools=tools,
+        model_name=model_name,
+        callbacks=callbacks
+    )
+
+    return graph, callbacks
+
+
+def build_agent_with_tools(
+    system_prompt: str,
+    tools: list[BaseTool],
+    model_name: str = "gpt-4o-mini"
+) -> StateGraph:
+    """
+    Build an agent with a specific set of tools.
+
+    Alias for build_agent with explicit tools parameter.
+    """
+    return build_agent(system_prompt, tools=tools, model_name=model_name)

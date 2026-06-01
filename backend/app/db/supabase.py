@@ -158,3 +158,55 @@ def insert_shared_context(message_id: str, session_id: str, target_folder: str, 
     }).execute()
     
     return context.data[0] if context.data else {}
+
+
+def insert_paper(
+    session_id: str,
+    source: str,
+    external_id: str,
+    title: str,
+    authors: list[str],
+    abstract: str,
+    url: str,
+    pdf_url: Optional[str] = None,
+    open_access: bool = False
+) -> dict:
+    """Insert a paper into the papers table."""
+    if not sb:
+        raise RuntimeError("Supabase client not configured")
+    
+    paper = sb.table("papers").insert({
+        "session_id": session_id,
+        "source": source,
+        "external_id": external_id,
+        "title": title,
+        "authors": authors,
+        "abstract": abstract,
+        "url": url,
+        "pdf_url": pdf_url,
+        "open_access": open_access,
+    }).execute()
+    
+    return paper.data[0] if paper.data else {}
+
+
+def get_paper_by_url(url: str, session_id: Optional[str] = None) -> Optional[dict]:
+    """Check if a paper already exists by URL."""
+    if not sb:
+        return None
+    
+    query = sb.table("papers").select("*").eq("url", url)
+    if session_id:
+        query = query.eq("session_id", session_id)
+    
+    result = query.execute()
+    return result.data[0] if result.data else None
+
+
+def list_papers(session_id: str, limit: int = 50) -> list[dict]:
+    """List all papers for a session."""
+    if not sb:
+        return []
+    
+    result = sb.table("papers").select("*").eq("session_id", session_id).order("created_at", desc=True).limit(limit).execute()
+    return result.data or []

@@ -2,6 +2,8 @@ import { createServerClient } from "@/lib/supabase-server";
 import { ChatPageClient } from "./ChatPageClient";
 import type { Session } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function ChatPage() {
   let initialSessions: Session[] = [];
 
